@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("LifeCheck.Launcher")
 
 # Config - Google Drive file ID for Archive.zip
-FILE_ID = "1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc/view"  # Replace with the actual file ID
+FILE_ID = "1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc"  # Replace with the actual file ID
 APP_FOLDER = "lifecheck"
 MAIN_FILE = "main.py"
 
