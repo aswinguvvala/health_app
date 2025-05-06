@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger("LifeCheck.Launcher")
 
 # Config
-ZIP_URL = "https://drive.google.com/uc?export=download&id=1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc"
+ZIP_URL = "https://drive.google.com/file/d/1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc/view?usp=share_link"
 APP_FOLDER = "lifecheck"
 MAIN_FILE = "main.py"
 
