@@ -103,17 +103,22 @@ def extract_zip(zip_path, extract_to="./"):
         st.error(f"Error extracting: {e}")
         return False
 
+# Define page config here - will be used only if files don't exist yet
+PAGE_CONFIG = {
+    "page_title": "LifeCheck - Health Assistant",
+    "layout": "wide",
+    "initial_sidebar_state": "expanded"
+}
+
 def main():
-    st.set_page_config(
-        page_title="LifeCheck - Health Assistant",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    st.title("LifeCheck - Health Assistant")
+    # We don't set the page config here anymore - we'll wait to see if we need to
     
     # Check if the app folder exists
     if not os.path.exists(APP_FOLDER) or not os.path.exists(os.path.join(APP_FOLDER, MAIN_FILE)):
+        # Only set page config if we're showing the download page
+        st.set_page_config(**PAGE_CONFIG)
+        
+        st.title("LifeCheck - Health Assistant")
         st.warning("LifeCheck files not found. Downloading...")
         
         # Install gdown if needed
@@ -165,8 +170,16 @@ def main():
         # Run the main function
         main_module.main()
     except Exception as e:
-        st.error(f"Error running LifeCheck: {e}")
-        logger.error(f"Error running app: {e}")
+        # If we got an error, we need to set the page config for our error page
+        if "set_page_config" in str(e):
+            st.warning("LifeCheck is running! Please refresh the page.")
+            st.stop()
+        else:
+            # For other errors, show an error page
+            st.set_page_config(**PAGE_CONFIG)
+            st.title("LifeCheck - Health Assistant")
+            st.error(f"Error running LifeCheck: {e}")
+            logger.error(f"Error running app: {e}")
 
 if __name__ == "__main__":
     main()
