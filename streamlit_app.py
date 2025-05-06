@@ -1,117 +1,76 @@
 import streamlit as st
+import requests
+import zipfile
+import io
 import os
 import sys
-import importlib.util
-import gdown
-import pandas as pd
-import pickle
-import json
+import logging
+from pathlib import Path
 
-# App title and initial setup
-st.set_page_config(page_title="LifeCheck", layout="wide")
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("LifeCheck.Launcher")
 
-# Google Drive folder IDs - replace these with your actual folder/file IDs
-DRIVE_IDS = {
-    'code_folder': "14uxP8K7fY9yulzAU0G6Mkoz-CPsWX1ZH",
-    'models_folder': "17A0Lnu0Fn-wXZ_5nssM9OJ5CsoQi8olq",
-    'plots_folder':"1_OLQBpbPmd2s6lNn6fSZMeIgmLRY2eS0",
-    'data_folder': "14uxP8K7fY9yulzAU0G6Mkoz-CPsWX1ZH",
-    
-}
+# Config
+ZIP_URL = "https://drive.google.com/uc?export=download&id=1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc"
+APP_FOLDER = "lifecheck"
+MAIN_FILE = "main.py"
 
-# Create necessary directories
-os.makedirs("code", exist_ok=True)
-os.makedirs("data", exist_ok=True)
-os.makedirs("models", exist_ok=True)
-os.makedirs("plots", exist_ok=True)
-
-def download_folder(folder_id, output_path):
-    """Download a folder from Google Drive"""
+def download_and_extract_zip(url, extract_to="./"):
+    """Download and extract zip file from Google Drive"""
     try:
-        st.write(f"Downloading {output_path}...")
-        gdown.download_folder(
-            id=folder_id,
-            output=output_path,
-            quiet=False
-        )
+        st.info("Downloading LifeCheck files...")
+        response = requests.get(url)
+        if response.status_code != 200:
+            st.error(f"Failed to download. Status code: {response.status_code}")
+            return False
+            
+        # Extract the zip file
+        st.info("Extracting files...")
+        z = zipfile.ZipFile(io.BytesIO(response.content))
+        z.extractall(extract_to)
         return True
     except Exception as e:
-        st.error(f"Error downloading {output_path}: {e}")
+        st.error(f"Error downloading or extracting: {e}")
         return False
 
-def download_file(file_id, output_path):
-    """Download a single file from Google Drive"""
+def main():
+    st.set_page_config(
+        page_title="LifeCheck - Health Assistant",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    st.title("LifeCheck - Health Assistant")
+    
+    # Check if the app folder exists
+    if not os.path.exists(APP_FOLDER):
+        st.warning("LifeCheck files not found. Downloading...")
+        success = download_and_extract_zip(ZIP_URL)
+        if not success:
+            st.error("Failed to set up LifeCheck. Please try again.")
+            return
+        st.success("LifeCheck files downloaded successfully!")
+        st.info("Starting LifeCheck app...")
+        st.rerun()
+    
+    # Now that we have the files, import and run the main app
     try:
-        st.write(f"Downloading {output_path}...")
-        gdown.download(
-            id=file_id,
-            output=output_path,
-            quiet=False
-        )
-        return True
-    except Exception as e:
-        st.error(f"Error downloading {output_path}: {e}")
-        return False
-
-def download_and_setup():
-    """Download all project files from Google Drive and set up the environment"""
-    st.write("Setting up LifeCheck application...")
-    
-    # Create a progress bar
-    progress = st.progress(0)
-    
-    # Step 1: Download the code folder
-    if not download_folder(DRIVE_IDS['code_folder'], "code"):
-        return False
-    progress.progress(25)
-    
-    # Step 2: Download the data folder
-    if not download_folder(DRIVE_IDS['data_folder'], "data"):
-        return False
-    progress.progress(50)
-    
-    # Step 3: Download the models folder
-    if not download_folder(DRIVE_IDS['models_folder'], "models"):
-        return False
-    progress.progress(75)
-    
-    # Step 4: Download the plots folder
-    if not download_folder(DRIVE_IDS['plots_folder'], "plots"):
-        return False
-    
-    # Step 5: Download requirements.txt
-    if not download_file(DRIVE_IDS['req_txt'], "requirements.txt"):
-        return False
-    progress.progress(100)
-    
-    # Step 6: Add code directory to Python path so we can import modules
-    code_dir = "./code"
-    if code_dir not in sys.path:
-        sys.path.insert(0, code_dir)
-    
-    st.success("Setup complete!")
-    return True
-
-# Check if we've already set up
-if 'setup_complete' not in st.session_state:
-    with st.spinner("Setting up application..."):
-        if download_and_setup():
-            st.session_state['setup_complete'] = True
-            st.experimental_rerun()  # Rerun the app now that setup is complete
-        else:
-            st.error("Setup failed. Please check the console for errors.")
-
-# Once setup is complete, import and run the main app
-if st.session_state.get('setup_complete', False):
-    try:
-        # Import main.py dynamically
-        spec = importlib.util.spec_from_file_location("main", "./code/main.py")
+        # Add the lifecheck directory to the Python path
+        if APP_FOLDER not in sys.path:
+            sys.path.insert(0, APP_FOLDER)
+        
+        # Import the main module
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("main", os.path.join(APP_FOLDER, MAIN_FILE))
         main_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(main_module)
         
-        # Run the main function from main.py
+        # Run the main function
         main_module.main()
     except Exception as e:
-        st.error(f"Error running LifeCheck application: {e}")
-        st.error("Check the console for more details or refresh the page.")
-        st.exception(e)
+        st.error(f"Error running LifeCheck: {e}")
+        logger.error(f"Error running app: {e}")
+
+if __name__ == "__main__":
+    main()
