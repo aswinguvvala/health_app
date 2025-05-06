@@ -1,94 +1,62 @@
 import streamlit as st
-import requests
-import zipfile
-import io
 import os
 import sys
 import logging
-import re
+import zipfile
+import subprocess
+import shutil
 from pathlib import Path
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("LifeCheck.Launcher")
 
-# Config - Google Drive file ID for Archive.zip
-FILE_ID = "1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc"  # Fixed: removed "/view"
+# Config - Google Drive file ID and URL
+FILE_ID = "1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc"
+FILE_URL = f"https://drive.google.com/uc?id={FILE_ID}"
 APP_FOLDER = "lifecheck"
 MAIN_FILE = "main.py"
 
-def download_file_from_google_drive(file_id, destination):
-    """
-    Download a file from Google Drive, handling large files correctly
-    """
-    def get_confirm_token(response):
-        for key, value in response.cookies.items():
-            if key.startswith('download_warning'):
-                return value
-        return None
+def install_gdown():
+    """Install gdown package if not already installed"""
+    try:
+        import gdown
+        st.success("gdown already installed")
+        return True
+    except ImportError:
+        st.info("Installing gdown package...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown"])
+            st.success("gdown installed successfully")
+            return True
+        except Exception as e:
+            st.error(f"Failed to install gdown: {e}")
+            return False
 
-    def save_response_content(response, destination):
-        CHUNK_SIZE = 32768
+def download_with_gdown(url, output_path):
+    """Download file from Google Drive using gdown"""
+    try:
+        import gdown
+        st.info(f"Downloading from Google Drive: {url}")
+        st.info(f"This may take a while for large files...")
         
-        # Check if the response is valid
-        if response.status_code != 200:
-            st.error(f"Error response: Status code {response.status_code}")
-            return False
-            
-        content_type = response.headers.get('content-type', '')
-        st.info(f"Response content type: {content_type}")
+        # Try downloading with gdown
+        output = gdown.download(url, output_path, quiet=False)
         
-        if 'text/html' in content_type and 'drive.google.com' in response.text:
-            st.error("Received HTML instead of file data. File may not be accessible.")
-            return False
-            
-        # Save the file
-        total_size = 0
-        with open(destination, "wb") as f:
-            for chunk in response.iter_content(CHUNK_SIZE):
-                if chunk:  # filter out keep-alive new chunks
-                    f.write(chunk)
-                    total_size += len(chunk)
-        
-        st.info(f"Downloaded {total_size} bytes")
-        
-        # Verify file was created and has content
-        if os.path.exists(destination) and os.path.getsize(destination) > 0:
+        if output:
+            file_size = os.path.getsize(output_path)
+            st.info(f"Downloaded file size: {file_size} bytes")
             return True
         else:
-            st.error("Downloaded file is empty or doesn't exist")
+            st.error("Download failed")
             return False
-
-    # Direct download link with export=download
-    URL = "https://docs.google.com/uc?export=download"
-    session = requests.Session()
-
-    st.info(f"Downloading file ID: {file_id}")
-    
-    # First attempt with the uc?export=download URL
-    response = session.get(URL, params={'id': file_id}, stream=True)
-    token = get_confirm_token(response)
-
-    if token:
-        st.info(f"Received confirmation token: {token}")
-        params = {'id': file_id, 'confirm': token}
-        response = session.get(URL, params=params, stream=True)
-
-    success = save_response_content(response, destination)
-    
-    # If the first method failed, try alternate URL format
-    if not success:
-        st.warning("First download method failed, trying alternate method...")
-        direct_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-        response = session.get(direct_url, stream=True)
-        success = save_response_content(response, destination)
-        
-    return success
+    except Exception as e:
+        st.error(f"Error downloading with gdown: {e}")
+        return False
 
 def extract_zip(zip_path, extract_to="./"):
     """Extract zip file to the specified directory"""
     try:
-        # First verify the file exists and is a zip
         if not os.path.exists(zip_path):
             st.error(f"Zip file does not exist: {zip_path}")
             return False
@@ -99,20 +67,35 @@ def extract_zip(zip_path, extract_to="./"):
         if file_size == 0:
             st.error("Zip file is empty (0 bytes)")
             return False
-            
-        # Check if file is actually a zip
-        with open(zip_path, 'rb') as f:
-            header = f.read(4)
-            # Zip files start with PK\x03\x04
-            if header != b'PK\x03\x04':
-                st.error(f"File is not a valid zip file (wrong header): {header}")
-                return False
         
         st.info("Extracting files...")
         with zipfile.ZipFile(zip_path, 'r') as z:
             z.extractall(extract_to)
         st.success("Extraction complete")
-        return True
+        
+        # Check if extraction created the expected app folder
+        if os.path.exists(APP_FOLDER):
+            num_files = len([f for f in os.listdir(APP_FOLDER) if os.path.isfile(os.path.join(APP_FOLDER, f))])
+            st.info(f"Extracted {num_files} files in {APP_FOLDER} directory")
+            return True
+        else:
+            # If the zip contains a folder with all contents, try to handle that
+            extracted_contents = os.listdir(".")
+            for item in extracted_contents:
+                if os.path.isdir(item) and item != APP_FOLDER:
+                    # Check if this directory contains the expected files
+                    if os.path.exists(os.path.join(item, MAIN_FILE)):
+                        st.info(f"Found main.py in {item} directory, renaming to {APP_FOLDER}")
+                        # If APP_FOLDER already exists as empty dir, remove it
+                        if os.path.exists(APP_FOLDER) and not os.listdir(APP_FOLDER):
+                            os.rmdir(APP_FOLDER)
+                        # Rename the directory to the expected APP_FOLDER
+                        os.rename(item, APP_FOLDER)
+                        return True
+            
+            st.error(f"Extraction did not create the expected {APP_FOLDER} directory")
+            return False
+            
     except zipfile.BadZipFile as e:
         st.error(f"Bad zip file: {e}")
         return False
@@ -130,18 +113,23 @@ def main():
     st.title("LifeCheck - Health Assistant")
     
     # Check if the app folder exists
-    if not os.path.exists(APP_FOLDER):
+    if not os.path.exists(APP_FOLDER) or not os.path.exists(os.path.join(APP_FOLDER, MAIN_FILE)):
         st.warning("LifeCheck files not found. Downloading...")
         
+        # Install gdown if needed
+        if not install_gdown():
+            st.error("Failed to install required dependencies.")
+            return
+        
         # Create temporary zip file path
-        temp_zip = "temp_archive.zip"
+        temp_zip = "archive.zip"
         
         # Remove existing file if it exists
         if os.path.exists(temp_zip):
             os.remove(temp_zip)
         
         # Download the zip file from Google Drive
-        success = download_file_from_google_drive(FILE_ID, temp_zip)
+        success = download_with_gdown(FILE_URL, temp_zip)
         
         if not success:
             st.error("Failed to download the zip file.")
@@ -150,9 +138,9 @@ def main():
         # Extract the zip file
         success = extract_zip(temp_zip)
         
-        # Keep the file for debugging - comment this out later
-        # if os.path.exists(temp_zip):
-        #     os.remove(temp_zip)
+        # Clean up the temp zip file
+        if os.path.exists(temp_zip):
+            os.remove(temp_zip)
             
         if not success:
             st.error("Failed to set up LifeCheck. Please try again.")
