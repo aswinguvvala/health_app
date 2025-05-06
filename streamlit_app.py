@@ -14,6 +14,7 @@ st.set_page_config(page_title="LifeCheck", layout="wide")
 DRIVE_IDS = {
     'code_folder': "14uxP8K7fY9yulzAU0G6Mkoz-CPsWX1ZH",
     'models_folder': "17A0Lnu0Fn-wXZ_5nssM9OJ5CsoQi8olq",
+    'plots_folder':"1_OLQBpbPmd2s6lNn6fSZMeIgmLRY2eS0",
     'data_folder': "14uxP8K7fY9yulzAU0G6Mkoz-CPsWX1ZH",
     'req_txt': "1sMEed9yNgLXvo_JwB1uyo6hXXRZVwzew/view"
 }
