@@ -12,8 +12,8 @@ st.set_page_config(page_title="LifeCheck", layout="wide")
 
 # Google Drive folder IDs - replace these with your actual folder/file IDs
 DRIVE_IDS = {
-    'code_folder': "14uxP8K7fY9yulzAU0G6Mkoz-CPsWX1ZH"
-    'models_folder': "17A0Lnu0Fn-wXZ_5nssM9OJ5CsoQi8olq"
+    'code_folder': "14uxP8K7fY9yulzAU0G6Mkoz-CPsWX1ZH",
+    'models_folder': "17A0Lnu0Fn-wXZ_5nssM9OJ5CsoQi8olq",
     'data_folder': "14uxP8K7fY9yulzAU0G6Mkoz-CPsWX1ZH",
     'req_txt': "1sMEed9yNgLXvo_JwB1uyo6hXXRZVwzew/view"
 }
