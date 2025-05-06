@@ -5,33 +5,58 @@ import io
 import os
 import sys
 import logging
+import re
 from pathlib import Path
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("LifeCheck.Launcher")
 
-# Config
-ZIP_URL = "https://drive.google.com/file/d/1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc/view?usp=share_link"
+# Config - Google Drive file ID for Archive.zip
+FILE_ID = "1QWf72OVLmmUs3eaj2qBauSChpXzxL3lc/view"  # Replace with the actual file ID
 APP_FOLDER = "lifecheck"
 MAIN_FILE = "main.py"
 
-def download_and_extract_zip(url, extract_to="./"):
-    """Download and extract zip file from Google Drive"""
+def download_file_from_google_drive(file_id, destination):
+    """
+    Download a file from Google Drive, handling large files correctly
+    """
+    def get_confirm_token(response):
+        for key, value in response.cookies.items():
+            if key.startswith('download_warning'):
+                return value
+        return None
+
+    def save_response_content(response, destination):
+        CHUNK_SIZE = 32768
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(CHUNK_SIZE):
+                if chunk:  # filter out keep-alive new chunks
+                    f.write(chunk)
+
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+
+    response = session.get(URL, params={'id': file_id}, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        st.info("Handling large file download...")
+        params = {'id': file_id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+
+    save_response_content(response, destination)
+    return os.path.exists(destination)
+
+def extract_zip(zip_path, extract_to="./"):
+    """Extract zip file to the specified directory"""
     try:
-        st.info("Downloading LifeCheck files...")
-        response = requests.get(url)
-        if response.status_code != 200:
-            st.error(f"Failed to download. Status code: {response.status_code}")
-            return False
-            
-        # Extract the zip file
         st.info("Extracting files...")
-        z = zipfile.ZipFile(io.BytesIO(response.content))
-        z.extractall(extract_to)
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            z.extractall(extract_to)
         return True
     except Exception as e:
-        st.error(f"Error downloading or extracting: {e}")
+        st.error(f"Error extracting: {e}")
         return False
 
 def main():
@@ -46,10 +71,28 @@ def main():
     # Check if the app folder exists
     if not os.path.exists(APP_FOLDER):
         st.warning("LifeCheck files not found. Downloading...")
-        success = download_and_extract_zip(ZIP_URL)
+        
+        # Create temporary zip file path
+        temp_zip = "temp_archive.zip"
+        
+        # Download the zip file from Google Drive
+        success = download_file_from_google_drive(FILE_ID, temp_zip)
+        
+        if not success:
+            st.error("Failed to download the zip file.")
+            return
+            
+        # Extract the zip file
+        success = extract_zip(temp_zip)
+        
+        # Clean up the temp zip file
+        if os.path.exists(temp_zip):
+            os.remove(temp_zip)
+            
         if not success:
             st.error("Failed to set up LifeCheck. Please try again.")
             return
+            
         st.success("LifeCheck files downloaded successfully!")
         st.info("Starting LifeCheck app...")
         st.rerun()
